@@ -193,9 +193,28 @@ function goToStock(code) {
 }
 
 function setupFilters() {
-  document.getElementById('sortBy').addEventListener('change', renderContractTable);
-  document.getElementById('minImportance').addEventListener('change', renderContractTable);
+  const reset = () => { _currentPage = 1; renderContractTable(); };
+  document.getElementById('sortBy').addEventListener('change', reset);
+  document.getElementById('minImportance').addEventListener('change', reset);
+
+  document.getElementById('pagePrev').addEventListener('click', () => {
+    if (_currentPage > 1) { _currentPage--; renderContractTable(); window.scrollTo({top: 0, behavior: 'smooth'}); }
+  });
+  document.getElementById('pageNext').addEventListener('click', () => {
+    _currentPage++; renderContractTable(); window.scrollTo({top: 0, behavior: 'smooth'});
+  });
+  document.getElementById('pageList').addEventListener('click', (e) => {
+    const btn = e.target.closest('.page-btn[data-page]');
+    if (!btn) return;
+    _currentPage = parseInt(btn.dataset.page);
+    renderContractTable();
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  });
 }
+
+// 페이지네이션 상태
+const PAGE_SIZE = 10;
+let _currentPage = 1;
 
 function renderContractTable() {
   const sortBy = document.getElementById('sortBy').value;
@@ -217,7 +236,13 @@ function renderContractTable() {
   count.textContent = `${rows.length.toLocaleString()}건`;
   empty.hidden = rows.length > 0;
 
-  tbody.innerHTML = rows.map(c => `
+  // 페이지네이션 계산
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  if (_currentPage > totalPages) _currentPage = 1;
+  const startIdx = (_currentPage - 1) * PAGE_SIZE;
+  const pageRows = rows.slice(startIdx, startIdx + PAGE_SIZE);
+
+  tbody.innerHTML = pageRows.map(c => `
     <tr data-code="${c.code}">
       <td class="col-date">${fmt.date(c.date)}</td>
       <td class="col-stock">
@@ -238,6 +263,49 @@ function renderContractTable() {
   tbody.querySelectorAll('tr').forEach(tr => {
     tr.addEventListener('click', () => goToStock(tr.dataset.code));
   });
+
+  renderPagination(rows.length, totalPages);
+}
+
+function renderPagination(total, totalPages) {
+  const wrap = document.getElementById('pagination');
+  const list = document.getElementById('pageList');
+  const prev = document.getElementById('pagePrev');
+  const next = document.getElementById('pageNext');
+  const info = document.getElementById('pageInfo');
+
+  if (total === 0) { wrap.hidden = true; return; }
+  wrap.hidden = false;
+
+  // 페이지 번호 윈도우: 현재 페이지 기준 좌우 2개 + 처음/마지막
+  const pages = buildPageWindow(_currentPage, totalPages, 2);
+  list.innerHTML = pages.map(p => {
+    if (p === '…') return `<span class="page-ellipsis">…</span>`;
+    return `<button class="page-btn${p === _currentPage ? ' active' : ''}" data-page="${p}" type="button">${p}</button>`;
+  }).join('');
+
+  prev.disabled = _currentPage <= 1;
+  next.disabled = _currentPage >= totalPages;
+
+  const from = total === 0 ? 0 : (_currentPage - 1) * PAGE_SIZE + 1;
+  const to   = Math.min(_currentPage * PAGE_SIZE, total);
+  info.textContent = `${from}-${to} / ${total}`;
+}
+
+function buildPageWindow(cur, total, span) {
+  // 1, 2, 3, ..., cur-1, cur, cur+1, ..., total-1, total 같은 윈도우
+  const set = new Set([1, total, cur]);
+  for (let i = 1; i <= span; i++) {
+    set.add(cur - i);
+    set.add(cur + i);
+  }
+  const sorted = [...set].filter(p => p >= 1 && p <= total).sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < sorted.length; i++) {
+    out.push(sorted[i]);
+    if (i < sorted.length - 1 && sorted[i + 1] - sorted[i] > 1) out.push('…');
+  }
+  return out;
 }
 
 // ===============================================
