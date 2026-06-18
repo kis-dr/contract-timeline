@@ -1,0 +1,41 @@
+# ===========================================
+# Contract Timeline - .gitignore
+# ===========================================
+
+# 비밀 (절대 커밋 금지) - 키/경로 하드코딩된 파일
+pipeline/config.py
+!pipeline/config.py.example
+
+# 로그
+pipeline/logs/
+logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# 에디터
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# 빌드 산출물
+build/
+dist/
+*.egg-info/

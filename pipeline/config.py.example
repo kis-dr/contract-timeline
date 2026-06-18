@@ -1,0 +1,55 @@
+"""
+config.py.example
+새 PC에서 셋업할 때 이 파일을 복사해 config.py 로 저장 후 실제 값 입력.
+
+  copy config.py.example config.py
+  notepad config.py
+
+⚠️ config.py 는 .gitignore 에 등록되어 git 추적되지 않습니다. 커밋 금지.
+"""
+from pathlib import Path
+
+# ===========================================
+# API
+# ===========================================
+KOSCOM_CUST_ID  = "여기에_KOSCOM_CUST_ID"
+KOSCOM_AUTH_KEY = "여기에_KOSCOM_AUTH_KEY"
+GEMINI_API_KEY  = "여기에_GEMINI_API_KEY"
+
+# ===========================================
+# 경로
+# ===========================================
+REPO_ROOT       = Path(r"C:\path\to\contract-timeline")
+BRIEF_DIR       = Path(r"\\HOST\path\to\brief_dir")
+STOCK_CHECK_DIR = Path(r"\\HOST\path\to\stock_check_dir")
+
+# ===========================================
+# 운영 옵션
+# ===========================================
+DATA_START_DATE    = "2026-06-01"
+BRIEF_ARCHIVE_DAYS = 365
+DRY_RUN            = False
+
+
+# ===========================================
+# 파생 경로 (수정 금지)
+# ===========================================
+DATA_DIR        = REPO_ROOT / "data"
+BRIEFS_BY_STOCK = DATA_DIR / "briefs_by_stock"
+ARCHIVE_DIR     = DATA_DIR / "briefs_archive"
+
+
+def ensure_dirs():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    BRIEFS_BY_STOCK.mkdir(parents=True, exist_ok=True)
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def summary() -> str:
+    return (
+        f"REPO_ROOT       = {REPO_ROOT}\n"
+        f"BRIEF_DIR       = {BRIEF_DIR}\n"
+        f"STOCK_CHECK_DIR = {STOCK_CHECK_DIR}\n"
+        f"DATA_START_DATE = {DATA_START_DATE}\n"
+        f"DRY_RUN         = {DRY_RUN}\n"
+    )

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>공급계약 타임라인 대시보드</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark">◇</span>
+      <span class="brand-name">Contract Timeline</span>
+      <span class="brand-sub">한국주식 공급계약 대시보드</span>
+    </div>
+    <div class="meta-strip" id="metaStrip">로딩중…</div>
+  </div>
+</header>
+
+<main class="container">
+
+  <section class="search-section">
+    <div class="search-wrap">
+      <input
+        type="text"
+        id="searchInput"
+        class="search-input"
+        placeholder="종목명, 종목코드, 또는 초성 (예: ㅅㅅㅈㅈ) 검색"
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <div id="searchResults" class="search-results" hidden></div>
+    </div>
+  </section>
+
+  <section class="filter-bar">
+    <div class="filter-left">
+      <span class="filter-label">정렬</span>
+      <select id="sortBy" class="filter-select">
+        <option value="date_desc">최신순</option>
+        <option value="date_asc">과거순</option>
+        <option value="importance_desc">중요도 높은순</option>
+        <option value="amount_desc">계약금액 큰순</option>
+      </select>
+      <span class="filter-label">최소중요도</span>
+      <select id="minImportance" class="filter-select">
+        <option value="1">★1↑</option>
+        <option value="2">★2↑</option>
+        <option value="3">★3↑</option>
+        <option value="4">★4↑</option>
+        <option value="5">★5</option>
+      </select>
+    </div>
+    <div class="filter-right">
+      <span id="resultCount" class="result-count">—</span>
+    </div>
+  </section>
+
+  <section class="table-section">
+    <table class="contract-table">
+      <thead>
+        <tr>
+          <th class="col-date">공시일</th>
+          <th class="col-stock">종목</th>
+          <th class="col-title">계약 내용</th>
+          <th class="col-counter">계약상대</th>
+          <th class="col-amount">금액(억)</th>
+          <th class="col-ratio">매출비중</th>
+          <th class="col-imp">중요도</th>
+          <th class="col-summary">AI 요약</th>
+        </tr>
+      </thead>
+      <tbody id="contractTbody">
+      </tbody>
+    </table>
+    <div id="emptyState" class="empty-state" hidden>
+      조건에 맞는 공급계약이 없습니다.
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>자산관리전략부 디지털리서치팀</span>
+    <span class="dot">·</span>
+    <span id="footerUpdated">—</span>
+  </div>
+</footer>
+
+<script src="assets/app.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => initMainPage());
+</script>
+</body>
+</html>
