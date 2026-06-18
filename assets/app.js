@@ -55,6 +55,14 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/** 종목코드 정규화: 'A207940' → '207940', '20' → '000020' */
+function normCode(raw) {
+  if (raw == null) return '';
+  let s = String(raw).trim().toUpperCase();
+  if (s.startsWith('A') && /^A\d+$/.test(s)) s = s.slice(1);
+  return s.padStart(6, '0');
+}
+
 async function fetchJson(path) {
   const r = await fetch(path);
   if (!r.ok) throw new Error(`fetch ${path} -> ${r.status}`);
@@ -94,7 +102,14 @@ async function initMainPage() {
       fetchJson(`${DATA_BASE}/contracts.json`),
       fetchJson(`${DATA_BASE}/stock_info.json`),
     ]);
+    // 데이터 소스 간 code 포맷 차이 방어 (예: 'A207940' vs '207940')
+    _contracts.forEach(c => { c.code = normCode(c.code); });
+    _stockInfo.forEach(s => { s.code = normCode(s.code); });
     _stockMap = Object.fromEntries(_stockInfo.map(s => [s.code, s]));
+    // 공급계약에 종목명이 비어있으면 stock_info에서 채워넣기
+    _contracts.forEach(c => {
+      if (!c.name && _stockMap[c.code]) c.name = _stockMap[c.code].name;
+    });
   } catch (e) {
     console.error(e);
     document.getElementById('contractTbody').innerHTML =
@@ -189,13 +204,28 @@ function setupSearch() {
 }
 
 function goToStock(code) {
-  if (code) window.location.href = `stock.html?code=${encodeURIComponent(code)}`;
+  if (!code) return;
+  window.location.href = `stock.html?code=${encodeURIComponent(normCode(code))}`;
 }
 
 function setupFilters() {
   const reset = () => { _currentPage = 1; renderContractTable(); };
   document.getElementById('sortBy').addEventListener('change', reset);
   document.getElementById('minImportance').addEventListener('change', reset);
+
+  const dFrom = document.getElementById('dateFrom');
+  const dTo   = document.getElementById('dateTo');
+  dFrom.addEventListener('change', () => { clearQuickActive(); reset(); });
+  dTo.addEventListener('change',   () => { clearQuickActive(); reset(); });
+
+  document.querySelectorAll('.quick-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyQuickRange(btn.dataset.range);
+      document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      reset();
+    });
+  });
 
   document.getElementById('pagePrev').addEventListener('click', () => {
     if (_currentPage > 1) { _currentPage--; renderContractTable(); window.scrollTo({top: 0, behavior: 'smooth'}); }
@@ -212,6 +242,40 @@ function setupFilters() {
   });
 }
 
+function clearQuickActive() {
+  document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+}
+
+function applyQuickRange(range) {
+  const dFrom = document.getElementById('dateFrom');
+  const dTo   = document.getElementById('dateTo');
+  // 데이터 최신 날짜 기준 (오늘이 아닐 수 있음 - 주말이나 백필 시점 고려)
+  const dataMaxDate = _contracts.length
+    ? _contracts.reduce((m, c) => c.date > m ? c.date : m, '0000-00-00')
+    : new Date().toISOString().slice(0, 10);
+  const base = new Date(dataMaxDate + 'T00:00:00');
+
+  if (range === 'all') {
+    dFrom.value = '';
+    dTo.value = '';
+    return;
+  }
+
+  let from;
+  if (range === 'today') {
+    from = new Date(base);
+  } else if (range === '7d') {
+    from = new Date(base);
+    from.setDate(from.getDate() - 6);  // 오늘 포함 7일
+  } else if (range === '30d') {
+    from = new Date(base);
+    from.setDate(from.getDate() - 29); // 오늘 포함 30일
+  }
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  dFrom.value = fmt(from);
+  dTo.value   = fmt(base);
+}
+
 // 페이지네이션 상태
 const PAGE_SIZE = 10;
 let _currentPage = 1;
@@ -219,11 +283,18 @@ let _currentPage = 1;
 function renderContractTable() {
   const sortBy = document.getElementById('sortBy').value;
   const minImp = parseInt(document.getElementById('minImportance').value);
+  const dFrom  = document.getElementById('dateFrom').value;
+  const dTo    = document.getElementById('dateTo').value;
   const tbody  = document.getElementById('contractTbody');
   const empty  = document.getElementById('emptyState');
   const count  = document.getElementById('resultCount');
 
-  let rows = _contracts.filter(c => (c.ai_importance || 0) >= minImp);
+  let rows = _contracts.filter(c => {
+    if ((c.ai_importance || 0) < minImp) return false;
+    if (dFrom && c.date < dFrom) return false;
+    if (dTo   && c.date > dTo)   return false;
+    return true;
+  });
 
   const cmp = {
     'date_desc':       (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id),
@@ -318,11 +389,13 @@ let _stock = null;
 async function initStockPage() {
   await loadMeta();
   const params = new URLSearchParams(window.location.search);
-  const code = (params.get('code') || '').trim();
-  if (!code) {
+  const rawCode = (params.get('code') || '').trim();
+  if (!rawCode) {
     document.getElementById('stockName').textContent = '종목 코드가 없습니다';
     return;
   }
+  // URL의 'A207940' 같은 형태도 모두 6자리 숫자로 정규화
+  const code = normCode(rawCode);
 
   let stockInfo;
   try {
@@ -331,17 +404,20 @@ async function initStockPage() {
     console.error(e); return;
   }
 
+  // stock_info.json 의 code 도 정규화 후 매칭 (구버전 데이터 호환)
+  stockInfo.forEach(s => { s.code = normCode(s.code); });
   _stock = stockInfo.find(s => s.code === code);
   if (!_stock) {
     document.getElementById('stockName').textContent = `종목 정보 없음 (${code})`;
-    return;
+    // 종목 정보가 없어도 공급계약/brief 는 시도 (데이터만 있을 수 있음)
+  } else {
+    renderStockHeader();
   }
-
-  renderStockHeader();
 
   // 공급계약 + brief 병렬 로드
   try {
     const allContracts = await fetchJson(`${DATA_BASE}/contracts.json`);
+    allContracts.forEach(c => { c.code = normCode(c.code); });
     _stockContracts = allContracts.filter(c => c.code === code);
   } catch (e) {
     console.warn('contracts load fail', e);

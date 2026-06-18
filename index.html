@@ -54,6 +54,16 @@
         <option value="4">★4↑</option>
         <option value="5">★5</option>
       </select>
+      <span class="filter-label">기간</span>
+      <input type="date" id="dateFrom" class="filter-date" title="시작일">
+      <span class="filter-tilde">~</span>
+      <input type="date" id="dateTo" class="filter-date" title="종료일">
+      <div class="quick-range">
+        <button class="quick-btn" data-range="today" type="button">오늘</button>
+        <button class="quick-btn" data-range="7d" type="button">7일</button>
+        <button class="quick-btn" data-range="30d" type="button">30일</button>
+        <button class="quick-btn" data-range="all" type="button">전체</button>
+      </div>
     </div>
     <div class="filter-right">
       <span id="resultCount" class="result-count">—</span>
