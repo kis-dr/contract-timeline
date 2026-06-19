@@ -431,6 +431,7 @@ async function initStockPage() {
 
   document.getElementById('briefToggle').addEventListener('change', renderTimeline);
   renderTimeline();
+  renderQuarterlyChart();
 }
 
 function renderStockHeader() {
@@ -540,5 +541,87 @@ function renderTimeline() {
         </div>
       `;
     }
+  }).join('');
+}
+
+// ===============================================
+// QUARTERLY CHART
+// ===============================================
+/**
+ * 정정공시 중복 제거:
+ * - original_acptno 있으면 → 같은 original_acptno 그룹에서 최신 것만 사용
+ * - 없으면 (현재 데이터) → 같은 (counterparty, period_start) 그룹에서 최신 것만 사용
+ * - 같은 계약에 대해 원공시+정정이 있으면 정정의 금액이 최신이므로 이걸 사용
+ */
+function deduplicateContracts(contracts) {
+  const groups = {};
+  contracts.forEach(c => {
+    // 그룹 키: original_acptno 우선, 없으면 (counterparty+period_start)
+    const key = c.original_acptno
+      || `${(c.counterparty || '').slice(0, 20)}_${c.period_start || c.date}`;
+    if (!groups[key] || c.date > groups[key].date) {
+      groups[key] = c;
+    }
+  });
+  return Object.values(groups);
+}
+
+function renderQuarterlyChart() {
+  const section = document.getElementById('chartSection');
+  const container = document.getElementById('chartContainer');
+  const note = document.getElementById('chartNote');
+
+  if (!_stockContracts.length) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+
+  // 정정 중복 제거
+  const unique = deduplicateContracts(_stockContracts);
+  const dupCount = _stockContracts.length - unique.length;
+  note.textContent = dupCount > 0
+    ? `정정공시 ${dupCount}건 중복 제거됨 · 유효 ${unique.length}건`
+    : `${unique.length}건`;
+
+  // 분기별 집계
+  const quarterMap = {};  // 'YYYY Q#' -> total amount
+  unique.forEach(c => {
+    if (!c.amount) return;
+    const d = c.period_start || c.date;
+    if (!d) return;
+    const y = d.slice(0, 4);
+    const m = parseInt(d.slice(5, 7)) || 1;
+    const q = Math.ceil(m / 3);
+    const key = `${y} Q${q}`;
+    quarterMap[key] = (quarterMap[key] || 0) + c.amount;
+  });
+
+  if (!Object.keys(quarterMap).length) {
+    section.hidden = true;
+    return;
+  }
+
+  // 정렬 (시간순)
+  const sorted = Object.entries(quarterMap).sort((a, b) => a[0].localeCompare(b[0]));
+  const maxVal = Math.max(...sorted.map(([, v]) => v));
+
+  // 막대 렌더링
+  container.innerHTML = sorted.map(([label, val]) => {
+    const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
+    const hPx = Math.max(2, Math.round(pct * 1.6));  // 최대 160px 높이
+    const isZero = val === 0;
+    const dispVal = val >= 1e12
+      ? (val / 1e12).toFixed(1) + '조'
+      : val >= 1e8
+        ? (val / 1e8).toFixed(0) + '억'
+        : Math.round(val).toLocaleString();
+    return `
+      <div class="chart-bar-group${isZero ? ' zero' : ''}">
+        <div class="chart-bar-value">${dispVal}</div>
+        <div class="chart-bar" style="height:${hPx}px" title="${label}: ${dispVal}"></div>
+        <div class="chart-bar-label">${label.replace(' ', '\n')}</div>
+      </div>
+    `;
   }).join('');
 }
