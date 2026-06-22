@@ -439,11 +439,9 @@ async function initStockPage() {
   document.getElementById('briefToggle').addEventListener('change', renderTimeline);
   document.getElementById('dedupTimeline').addEventListener('change', () => {
     renderTimeline();
-    renderStockTable();
     renderQuarterlyChart();
   });
   renderTimeline();
-  renderStockTable();
   renderQuarterlyChart();
 }
 
@@ -515,20 +513,26 @@ function renderTimeline() {
   tl.innerHTML = items.map(it => {
     if (it.type === 'contract') {
       const c = it.data;
+      // 메타 값들 (레이블 없이 값만)
+      const ctp = esc(c.counterparty || '—');
+      const amt = c.amount != null ? `${fmt.amount(c.amount)}억` : '—';
+      const rev = c.revenue_ratio != null ? `${c.revenue_ratio.toFixed(2)}%` : '—';
       return `
         <div class="tl-item contract">
           <span class="tl-dot"></span>
           <div class="tl-date">${fmt.date(c.date)}</div>
           <div class="tl-card">
-            <div class="tl-card-head">
-              <div class="tl-card-title">${esc(c.title)}</div>
-              <span class="tag tag-contract">공급계약</span>
+            <div class="tl-card-meta tl-card-meta-primary">
+              <span class="meta-ctp">${ctp}</span>
+              <span class="meta-sep">·</span>
+              <span class="meta-amt mono">${amt}</span>
+              <span class="meta-sep">·</span>
+              <span class="meta-rev mono">${rev}</span>
+              <span class="meta-stars">${stars(c.ai_importance)}</span>
             </div>
-            <div class="tl-card-meta">
-              <span>상대: ${esc(c.counterparty || '—')}</span>
-              <span>금액: ${fmt.amount(c.amount)}억</span>
-              <span>매출비중: ${c.revenue_ratio != null ? c.revenue_ratio.toFixed(2) + '%' : '—'}</span>
-              ${stars(c.ai_importance)}
+            <div class="tl-card-subhead">
+              <span class="tl-card-title-sub">${esc(c.title)}</span>
+              <span class="tag tag-contract">공급계약</span>
             </div>
             <div class="tl-card-summary">${esc(c.ai_summary || '')}</div>
             ${c.url ? `<a class="tl-card-link" href="${esc(c.url)}" target="_blank" rel="noopener">원문 공시 →</a>` : ''}
@@ -558,45 +562,6 @@ function renderTimeline() {
         </div>
       `;
     }
-  }).join('');
-}
-
-// ===============================================
-// STOCK CONTRACT TABLE
-// ===============================================
-function renderStockTable() {
-  const section = document.getElementById('stockTableSection');
-  const tbody = document.getElementById('stockContractTbody');
-  const dedup = document.getElementById('dedupTimeline').checked;
-
-  const contracts = dedup ? deduplicateContracts(_stockContracts) : _stockContracts;
-
-  if (!contracts.length) {
-    section.hidden = true;
-    return;
-  }
-  section.hidden = false;
-
-  // 최신순 정렬
-  const sorted = [...contracts].sort((a, b) => b.date.localeCompare(a.date));
-
-  tbody.innerHTML = sorted.map(c => {
-    const amountDisp = c.amount != null ? fmt.amount(c.amount) : '—';
-    const ratioDisp = c.revenue_ratio != null ? c.revenue_ratio.toFixed(1) + '%' : '—';
-    const isAmend = c.is_amendment;
-    // 계약 내용에서 회사명 제거하고 핵심만 추출
-    let titleShort = (c.title || '').replace(/^.*?(?:단일판매|판매)/, '판매');
-    if (titleShort.length > 30) titleShort = titleShort.slice(0, 28) + '…';
-
-    return `<tr>
-      <td class="col-date">${fmt.date(c.date)}</td>
-      <td>${esc(titleShort)}${isAmend ? '<span class="amendment-badge">정정</span>' : ''}</td>
-      <td>${esc(c.counterparty || '—')}</td>
-      <td class="col-r">${amountDisp}</td>
-      <td class="col-r">${ratioDisp}</td>
-      <td>${stars(c.ai_importance)}</td>
-      <td>${c.url ? `<a class="dart-link" href="${esc(c.url)}" target="_blank" rel="noopener">원문 →</a>` : '—'}</td>
-    </tr>`;
   }).join('');
 }
 
