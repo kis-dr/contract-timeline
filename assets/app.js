@@ -212,6 +212,7 @@ function setupFilters() {
   const reset = () => { _currentPage = 1; renderContractTable(); };
   document.getElementById('sortBy').addEventListener('change', reset);
   document.getElementById('minImportance').addEventListener('change', reset);
+  document.getElementById('dedupToggle').addEventListener('change', reset);
 
   const dFrom = document.getElementById('dateFrom');
   const dTo   = document.getElementById('dateTo');
@@ -281,15 +282,19 @@ const PAGE_SIZE = 10;
 let _currentPage = 1;
 
 function renderContractTable() {
-  const sortBy = document.getElementById('sortBy').value;
-  const minImp = parseInt(document.getElementById('minImportance').value);
-  const dFrom  = document.getElementById('dateFrom').value;
-  const dTo    = document.getElementById('dateTo').value;
-  const tbody  = document.getElementById('contractTbody');
-  const empty  = document.getElementById('emptyState');
-  const count  = document.getElementById('resultCount');
+  const sortBy  = document.getElementById('sortBy').value;
+  const minImp  = parseInt(document.getElementById('minImportance').value);
+  const dFrom   = document.getElementById('dateFrom').value;
+  const dTo     = document.getElementById('dateTo').value;
+  const dedup   = document.getElementById('dedupToggle').checked;
+  const tbody   = document.getElementById('contractTbody');
+  const empty   = document.getElementById('emptyState');
+  const count   = document.getElementById('resultCount');
 
-  let rows = _contracts.filter(c => {
+  // 최신 공시만: 정정된 원공시 숨기기
+  let source = dedup ? deduplicateContracts(_contracts) : _contracts;
+
+  let rows = source.filter(c => {
     if ((c.ai_importance || 0) < minImp) return false;
     if (dFrom && c.date < dFrom) return false;
     if (dTo   && c.date > dTo)   return false;
@@ -424,13 +429,21 @@ async function initStockPage() {
     _stockContracts = [];
   }
   try {
-    _stockBriefs = await fetchJson(`${DATA_BASE}/briefs_by_stock/${code}.json`);
+    const rawBriefs = await fetchJson(`${DATA_BASE}/briefs_by_stock/${code}.json`);
+    // 제목 없는 브리핑 제외
+    _stockBriefs = rawBriefs.filter(b => b.article_title && b.article_title.trim());
   } catch (e) {
     _stockBriefs = []; // 해당 종목 brief 없을 수 있음
   }
 
   document.getElementById('briefToggle').addEventListener('change', renderTimeline);
+  document.getElementById('dedupTimeline').addEventListener('change', () => {
+    renderTimeline();
+    renderStockTable();
+    renderQuarterlyChart();
+  });
   renderTimeline();
+  renderStockTable();
   renderQuarterlyChart();
 }
 
@@ -461,12 +474,16 @@ function renderStockHeader() {
 
 function renderTimeline() {
   const showBrief = document.getElementById('briefToggle').checked;
+  const dedup     = document.getElementById('dedupTimeline').checked;
   const tl    = document.getElementById('timeline');
   const empty = document.getElementById('timelineEmpty');
   const badge = document.getElementById('contractCountBadge');
 
+  // 최신 공시만: 정정된 원공시 숨기기
+  const contracts = dedup ? deduplicateContracts(_stockContracts) : _stockContracts;
+
   // 항목 모으기
-  const items = _stockContracts.map(c => ({
+  const items = contracts.map(c => ({
     type: 'contract',
     date: c.date,
     sortKey: c.date,
@@ -484,7 +501,7 @@ function renderTimeline() {
     });
   }
 
-  badge.textContent = `${_stockContracts.length}건`;
+  badge.textContent = `${contracts.length}건`;
 
   if (items.length === 0) {
     tl.innerHTML = '';
@@ -545,20 +562,58 @@ function renderTimeline() {
 }
 
 // ===============================================
+// STOCK CONTRACT TABLE
+// ===============================================
+function renderStockTable() {
+  const section = document.getElementById('stockTableSection');
+  const tbody = document.getElementById('stockContractTbody');
+  const dedup = document.getElementById('dedupTimeline').checked;
+
+  const contracts = dedup ? deduplicateContracts(_stockContracts) : _stockContracts;
+
+  if (!contracts.length) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+
+  // 최신순 정렬
+  const sorted = [...contracts].sort((a, b) => b.date.localeCompare(a.date));
+
+  tbody.innerHTML = sorted.map(c => {
+    const amountDisp = c.amount != null ? fmt.amount(c.amount) : '—';
+    const ratioDisp = c.revenue_ratio != null ? c.revenue_ratio.toFixed(1) + '%' : '—';
+    const isAmend = c.is_amendment;
+    // 계약 내용에서 회사명 제거하고 핵심만 추출
+    let titleShort = (c.title || '').replace(/^.*?(?:단일판매|판매)/, '판매');
+    if (titleShort.length > 30) titleShort = titleShort.slice(0, 28) + '…';
+
+    return `<tr>
+      <td class="col-date">${fmt.date(c.date)}</td>
+      <td>${esc(titleShort)}${isAmend ? '<span class="amendment-badge">정정</span>' : ''}</td>
+      <td>${esc(c.counterparty || '—')}</td>
+      <td class="col-r">${amountDisp}</td>
+      <td class="col-r">${ratioDisp}</td>
+      <td>${stars(c.ai_importance)}</td>
+      <td>${c.url ? `<a class="dart-link" href="${esc(c.url)}" target="_blank" rel="noopener">원문 →</a>` : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ===============================================
 // QUARTERLY CHART
 // ===============================================
 /**
  * 정정공시 중복 제거:
- * - original_acptno 있으면 → 같은 original_acptno 그룹에서 최신 것만 사용
- * - 없으면 (현재 데이터) → 같은 (counterparty, period_start) 그룹에서 최신 것만 사용
+ * - 모든 공시가 original_rcpno 를 가짐 (정정공시: 원공시 rcpNo, 원공시: 자기 자신 rcpNo)
+ * - 같은 original_rcpno 그룹 내에서 가장 최신 공시(date 기준) 1건만 사용
  * - 같은 계약에 대해 원공시+정정이 있으면 정정의 금액이 최신이므로 이걸 사용
  */
 function deduplicateContracts(contracts) {
   const groups = {};
   contracts.forEach(c => {
-    // 그룹 키: original_acptno 우선, 없으면 (counterparty+period_start)
-    const key = c.original_acptno
-      || `${(c.counterparty || '').slice(0, 20)}_${c.period_start || c.date}`;
+    // 그룹 키: original_rcpno (없을 경우 fallback으로 id 사용)
+    const key = c.original_rcpno || c.id;
     if (!groups[key] || c.date > groups[key].date) {
       groups[key] = c;
     }
