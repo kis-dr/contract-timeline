@@ -311,6 +311,10 @@ a { color: inherit; text-decoration: none; }
   color: var(--text-muted);
 }
 
+.notice-gray {
+    color: #767676;
+    font-size: 13px; /* 안내 문구이므로 글자 크기를 살짝 줄이면 더 자연스럽습니다. */
+}
 /* ───────────────────────────────────────────────
    Stock page header
    ─────────────────────────────────────────────── */
