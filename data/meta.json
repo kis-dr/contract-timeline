@@ -1,7 +1,7 @@
 {
-  "updated_at": "2026-10-23T01:01:45+09:00",
-  "n_contracts": 3750,
-  "n_stocks": 2555,
+  "updated_at": "2026-10-24T01:01:49+09:00",
+  "n_contracts": 3768,
+  "n_stocks": 2556,
   "data_start": "2026-01-01",
   "data_source": "DeepSearch + DART"
 }
